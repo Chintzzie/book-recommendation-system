@@ -1,6 +1,8 @@
+from numpy.core.numeric import True_
 import collab_filtering_recommender as cfr
 import content_based_recommender as cbr
 import random
+import math
 from matplotlib import pyplot as plt
 
 
@@ -140,7 +142,7 @@ def paint(title,items,num_of_items=10,printableMatterIndex=0):
         print("No item recommendations available for this datapoint!")
     else:
         for item in items:
-            print("    {}".format(cbr.getItemTitle( item[printableMatterIndex] ) ) )
+            print("    {}   {}".format(cbr.getItemTitle( item[printableMatterIndex] ) ,item[0]) )
     print("-------------- END ---------------")
     print()
 
@@ -150,33 +152,139 @@ def paintDict(title,data):
         print("{}:- {}".format(key,val))
     print()
 
+def magnitude(vector):
+    res=0
+    for x,y in vector.items():
+        res+=y*y
+    return math.sqrt(res)
+
+def multVector(A,B):
+
+    C,D=A,B
+
+    res=0
+
+    for x,y in C.items():
+        if x not in D:
+            continue
+        res+=y*D[x]
+
+    return res
+
+def dotVector(A,B):
+    numerator=multVector(A,B)
+    denominator=magnitude(A)*magnitude(B)
+    if denominator==0:
+        return 0
+    return numerator/denominator
+
+
+def printFocusPoints(vector,title):
+
+    listt=[]
+    for i,j in vector.items():
+        listt.append((i,j))
+
+    listt.sort(key=lambda x:x[1],reverse=True)
+
+    print("Focal Points of {} recommendation are-".format(title))
+    for i in range(min(5,len(listt))):
+        print(listt[i][0],end=",")
+
+    print()
+
+def getVector(Items,Attributes,title):
+
+
+
+    vector={}
+
+    for itemId,score in Items:
+
+        try:
+            item=cbr.getItemDetail(itemId)
+
+        except:
+            continue
+
+        for attribute in Attributes:
+            entity=item[attribute]
+            if entity not in vector:
+                vector[entity]=0
+            vector[entity]+=1
+
+    print() 
+    printFocusPoints(vector,title)
+
+    return vector
+
+
+
+
+
+def computeMetrics(CBR,CFR,Hybrid,Attributes):
+    print("Insights regarding recommendations")
+
+    CBRV,CFRV,HybridV=getVector(CBR,Attributes,"CBR"),getVector(CFR,Attributes,"CFR"),getVector(Hybrid,Attributes,"hybrid")
+    
+    #print("Vectors generated")
+
+    CBRCFR=dotVector(CBRV,CFRV)
+    CBRHyb=dotVector(CBRV,HybridV)
+    CFRHyb=dotVector(CFRV,HybridV)
+    final=CBRCFR*CBRHyb*CFRHyb
+
+    print("Convergence score=",final)
+
+    #print("Leaving computemTerics")
+
+
+
 def processQueryByUserId():
     print("Enter UserId ")
     
-    try:
-        userId=int(input())
-        paintDict("User Detail",cbr.getUserDetail(userId))
-        cbr.displayPreviouslyUsedItemsByAUser(cbr.getUser(userId))
-        paint("CBR Users",getCBRSimilarItemsForAUser(userId))
-        paint("CFR Users",getCFRSimilarItemsForAUser(userId))
-        paint("Hybrid Users",getHybridSimilarItemsForAUser(userId))
-    except:
+    #try:
+
+    userId=int(input())
+    paintDict("User Detail",cbr.getUserDetail(userId))
+    cbr.displayPreviouslyUsedItemsByAUser(cbr.getUser(userId))
+
+    CBRItems=getCBRSimilarItemsForAUser(userId)
+    CFRItems=getCFRSimilarItemsForAUser(userId)
+    HybridItems=getHybridSimilarItemsForAUser(userId)
+
+    computeMetrics(CBRItems,CFRItems,HybridItems,["category","author"])
+
+    paint("CBR Users",CBRItems)
+    paint("CFR Users",CFRItems)
+    paint("Hybrid Users",HybridItems)
+
+    """except:
         print("Invalid UserId")
-        return
+        return  """
 
 def processQueryByItemId():
     print("Enter ItemId ")
     
 
     try:
+
         itemId=int(input())
         paintDict("Item Info",cbr.getItemDetail(itemId))
-        paint("CBR Items",getCBRSimilarItemsForAItem(itemId),printableMatterIndex=1)
-        paint("CFR Items",getCFRSimilarItemsForAItem(itemId))
-        paint("Hybrid Items",getHybridSimilarItemsForAItem(itemId))
+
+        CBRItems=getCBRSimilarItemsForAItem(itemId)
+        CFRItems=getCFRSimilarItemsForAItem(itemId)
+        HybridItems=getHybridSimilarItemsForAItem(itemId)
+
+        #computeMetrics(CBRItems,CFRItems,HybridItems,["category","author"])
+
+        paint("CBR Items",CBRItems,printableMatterIndex=1)
+        paint("CFR Items",CFRItems)
+        paint("Hybrid Items",HybridItems)
+
     except:
         print("Invalid ItemId")
-        return
+        return 
 
 def getUserDetail():
     print("Enter UserId ")
@@ -185,6 +293,7 @@ def getUserDetail():
         userId=int(input())
         paintDict("User Detail",cbr.getUserDetail(userId))
     except:
+        #raise("Invalid userId")
         print("Invalid UserId")
         return
 def getItemDetail():
@@ -198,9 +307,90 @@ def getItemDetail():
         print("Invalid ItemId")
         return
 
+
+def addRating():
+    print("Enter userId,bookId,rating seperated by spaces")
+    inps=list(map(int,input().split()))
+    try:
+        cbr.getUserDetail(inps[0])
+        cbr.getItemDetail(inps[1])
+    except:
+        print("Invalid userId or itemId")
+        return
+
+    try:
+
+        cbr.addRating(inps[0],inps[1],inps[2])
+    except:
+        print("Mismatch in no. of input values")
+
+
+def searchForItems(searchTerm,userId,attributes=['title','author','pub-year','publisher','category','description']):
+
+    hybridItems=getHybridSimilarItemsForAUser(userId,1000)
+
+    hybridItemsExtended=[]
+    for hybridItem in hybridItems:
+
+        id,simScore=hybridItem[0],hybridItem[1]
+        
+        item=cbr.getItemDetail(id)
+        
+
+        text=""
+        for attribute in attributes:
+            text+=str(item[attribute])
+
+        text=text.lower()
+
+        searchScore=getScoreForText(text,searchTerm)
+
+        hybridItemsExtended.append((id,searchScore,simScore))
+
+    hybridItemsExtended.sort(key=lambda x:( x[1],x[2] ),reverse=True)
+
+    print(hybridItemsExtended[:20])
+
+    return hybridItemsExtended
+
+
+
+
+
+
+
+
+def getScoreForText(text,searchTerm):
+    score=0
+
+    wordsInSearchTerm=searchTerm.split()
+    for wordInSearchTerm in wordsInSearchTerm:
+        adder=len(wordInSearchTerm)
+        wordsInText=text.split()
+
+        wordsInTextFreq={}
+        for i in wordsInText:
+            if i not in wordsInTextFreq:
+                wordsInTextFreq[i]=0
+            wordsInTextFreq[i]+=1
+
+        if wordInSearchTerm in wordsInTextFreq:
+            score+=adder*wordsInTextFreq[wordInSearchTerm]
+
+    return score
+
+
+def search():
+    print("Enter userId and search term")
+    userId,searchTerm=input().split()
+    userId=int(userId)
+
+    paint("Search results",searchForItems(searchTerm,userId))
+
+
 while True:
 
-    print("\nSelect any one \n1.Recommendations by UserID \n2.Recommendations by ItemID\n3.Get user detail\n4.Get item detail\n5.Exit\n")
+    print("\nSelect any one \n1.Get user recommendations \n2.Get similar items\n3.Print user Info\n4.Get item info\n5.Add Rating to a Item\n6.Search for item\n7.Exit\n")
     choice=int(input())
     
     if choice==1:
@@ -212,6 +402,10 @@ while True:
     elif choice==4:
         getItemDetail()
     elif choice==5:
+        addRating() 
+    elif choice==6:
+        search()   
+    elif choice==7:
         print("bye-bye")
         break
     else:

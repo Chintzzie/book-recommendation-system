@@ -13,6 +13,8 @@ IndexToIdMapping={}
 users={}
 ratings={}
 
+extendedUsers={}
+
 path="C:/Users/Dell/Desktop/big-data-projo/code/data/books/"
 actualds = pd.read_csv(path+"bookDesc.csv")
 df_users = pd.read_csv(path + "BX-Users.csv", sep=';', encoding="ISO-8859-1")
@@ -56,7 +58,7 @@ def performSimilarityComputation():
         results[row['id']] = similar_items
         index+=1
         
-    print('Similarity Computation Done')
+    print('CBR: Similarity Computation Done')
 
 def getItemTitle(id):
     title=actualds.loc[actualds['id'] == id]['title'].tolist()
@@ -104,7 +106,25 @@ def startRecommendation():
         item_id=int(input())
         recommend(item_id=item_id, num=2)
 
+def addRating(user_id,book_id,rating):
+    global extendedUsers
+
+    if user_id not in extendedUsers:
+        getUser(user_id)
+
+    print("CBR: Before Rating modified",extendedUsers[user_id])
+
+    extendedUsers[user_id]['ratings'][book_id]=rating
+
+    print("CBR: Added Rating",extendedUsers[user_id])
+
 def getUser(user_id):
+
+    global extendedUsers
+
+    if user_id in extendedUsers:
+        return extendedUsers[user_id]
+
 
     user=users[user_id]
     if user_id not in ratings:
@@ -122,6 +142,9 @@ def getUser(user_id):
         if len(bookId)==1:
             bookId=bookId[0][0]
             user['ratings'][bookId]=rating
+
+    extendedUsers[user_id]=user
+
     return user
     # user['ratings']=
 
